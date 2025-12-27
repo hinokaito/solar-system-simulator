@@ -30,6 +30,12 @@ const NEPTUNE: [f32; 4] =   [3.88,  30.07 * AU_UNITS, 0.0, 0.0];
 // Components
 // ========================================
 
+// --- カメラ ---
+#[derive(Component)]
+struct MainCamera;
+
+
+// --- 天体 ---
 #[derive(Component)]
 struct Sun;
 
@@ -59,9 +65,17 @@ struct Neptune;
 
 
 // ========================================
+// resource
+// ========================================
+
+#[derive(Resource)]
+struct CameraSpeed(f32);
+
+// ========================================
 // Systems
 // ========================================
 
+// セットアップ
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
@@ -201,6 +215,7 @@ fn setup(
 
     // カメラ
     commands.spawn((
+        MainCamera,
         Camera3d::default(),
         Hdr,
         Tonemapping::TonyMcMapface,
@@ -230,6 +245,57 @@ fn setup(
 }
 
 
+// カメラ移動システム
+fn move_camera(
+    time: Res<Time>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut camera_speed: ResMut<CameraSpeed>,
+    mut query: Query<&mut Transform, With<MainCamera>>,
+) {
+    if let Ok(mut transform) = query.single_mut() {
+        let move_speed = camera_speed.0;
+        let rotate_speed = 1.0;
+
+        // --- 回転処理 ---
+        if keyboard_input.pressed(KeyCode::KeyQ) {
+            transform.rotate_axis(Dir3::Y, rotate_speed * time.delta_secs());
+        }
+        if keyboard_input.pressed(KeyCode::KeyE) {
+            transform.rotate_axis(Dir3::Y, -rotate_speed * time.delta_secs());
+        }
+
+        // --- 移動処理 ---
+        let mut movement = Vec3::ZERO;
+        let local_forward = transform.forward();
+        let local_right = transform.right();
+
+        if keyboard_input.pressed(KeyCode::KeyW) { movement += *local_forward; }
+        if keyboard_input.pressed(KeyCode::KeyS) { movement -= *local_forward; }
+        if keyboard_input.pressed(KeyCode::KeyD) { movement += *local_right; }
+        if keyboard_input.pressed(KeyCode::KeyA) { movement -= *local_right; }
+        if keyboard_input.pressed(KeyCode::ControlLeft) { movement -= Vec3::Y; }
+        if keyboard_input.pressed(KeyCode::Space) { movement += Vec3::Y; }
+
+        // --- オプション ---
+        if keyboard_input.pressed(KeyCode::Digit0) { camera_speed.0 = 1.0; }
+        if keyboard_input.pressed(KeyCode::Digit1) { camera_speed.0 = 5.0; }
+        if keyboard_input.pressed(KeyCode::Digit2) { camera_speed.0 = 15.0; }
+        if keyboard_input.pressed(KeyCode::Digit3) { camera_speed.0 = 30.0; }
+        if keyboard_input.pressed(KeyCode::Digit4) { camera_speed.0 = 90.0; }
+        if keyboard_input.pressed(KeyCode::Digit5) { camera_speed.0 = 150.0; }
+        if keyboard_input.pressed(KeyCode::Digit6) { camera_speed.0 = 250.0; }
+        if keyboard_input.pressed(KeyCode::Digit7) { camera_speed.0 = 1000.0; }
+        if keyboard_input.pressed(KeyCode::Digit8) { camera_speed.0 = 10000.0; }
+        if keyboard_input.pressed(KeyCode::Digit9) { camera_speed.0 = 100000.0; }
+
+        if movement.length_squared() > 0.0 {
+            let delta = movement.normalize() * move_speed * time.delta_secs();
+            transform.translation += delta;
+        }
+    }
+}
+
+
 // ========================================
 // App Entry Point
 // ========================================s
@@ -237,7 +303,9 @@ fn setup(
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(CameraSpeed(30.0))
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
+        .add_systems(Update, move_camera)
         .run();
 }
