@@ -338,7 +338,7 @@ fn setup(
             far: 1_000_000.0,
             ..default()
         }),
-        Transform::from_xyz(1000.0, 0.0, 0.0)
+        Transform::from_xyz(750.0, 0.0, 0.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
         Speedometer {
             current_speed_units_per_sec: 0.0,
@@ -553,24 +553,32 @@ fn planet_button_system(
     >,
     mut camera_query: Query<&mut Transform, With<MainCamera>>,
 ) {
+    use Planet::*;
     let Ok(mut camera_transform) = camera_query.single_mut() else { return };
 
     for (interaction, mut bg_color, planet_button) in &mut interaction_query {
         match *interaction {
             Interaction::Pressed => {
                 *bg_color = Color::srgb(0.1, 0.5, 0.1).into();
+                let target = planet_button.0;
                 let target_pos = get_planet_position(planet_button.0);
 
                 // 太陽の時は引き目にする
-                let offset = if target_pos == Vec3::ZERO {
-                    Vec3::new(1000.0, 0.0, 0.0)
-                } else {
-                    Vec3::new(100.0, 0.0, 0.0)
+                let offset = match target {
+                    SUN =>     Vec3::new(750.0, 0.0, 0.0),
+                    MERCURY => Vec3::new(3.0, 0.0, -0.7),
+                    VENUS =>   Vec3::new(8.0, 0.0, -1.7),
+                    EARTH =>   Vec3::new(8.0, 0.0, -1.7),
+                    MARS =>    Vec3::new(4.0, 0.0, -0.9),
+                    JUPITER => Vec3::new(60.0, 0.0, -17.0),
+                    SATURN =>  Vec3::new(55.0, 0.0, -14.0),
+                    URANUS =>  Vec3::new(25.0, 0.0, -7.0),
+                    NEPTUNE => Vec3::new(25.0, 0.0, -7.0),
                 };
 
-                // 対象の惑星に視線を合わせる
+                // ~~対象の惑星に視線を合わせる~~ 太陽に合わせた
                 *camera_transform = Transform::from_translation(target_pos + offset)
-                    .looking_at(target_pos, Vec3::Y);
+                    .looking_at(Vec3::ZERO, Vec3::Y);
             }
             Interaction::Hovered => {
                 *bg_color = Color::srgb(0.3, 0.3, 0.3).into();

@@ -13,6 +13,34 @@
 - VIEW CONTROL: `Q/E`
 - UP/DOWN: `Space/LCtrl`
 
+### Screenshots
+**SUN**
+![SUN](./Screenshots/SUN.png)
+
+**MERCURY**
+![MERCURY](./Screenshots/MERCURY.png)
+
+**VENUS**
+![VENUS](./Screenshots/VENUS.png)
+
+**EARTH**
+![EARTH](./Screenshots/EARTH.png)
+
+**MARS**
+![MARS](./Screenshots/MARS.png)
+
+**JUPITER**
+![JUPITER](./Screenshots/JUPITER.png)
+
+**SATURN**
+![SATURN](./Screenshots/SATURN.png)
+
+**URANUS**
+![URANUS](./Screenshots/URANUS.png)
+
+**NEPTUNE**
+![NEPTUNE](./Screenshots/NEPTUNE.png)
+
 ## Assets & Licenses
 Some textures used in this project are provided by Solar System Scope.
 
