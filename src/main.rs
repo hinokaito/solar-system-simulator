@@ -1,5 +1,5 @@
 use bevy::{
-    asset::transformer, core_pipeline::tonemapping::Tonemapping, post_process::bloom::Bloom, prelude::*, render::view::Hdr
+    core_pipeline::tonemapping::Tonemapping, post_process::bloom::Bloom, prelude::*, render::view::Hdr
 };
 
 // ========================================
@@ -34,6 +34,21 @@ const NEPTUNE: [f32; 4] =   [3.88,  30.07 * AU_UNITS, 0.0, 0.0];
 #[derive(Component)]
 struct MainCamera;
 
+// 座標用
+#[derive(Component)]
+struct CameraPositionText;
+
+// スピードメーター用
+#[derive(Component)]
+struct Speedometer {
+    current_speed_units_per_sec: f32,
+    last_position: Vec3,
+}
+
+#[derive(Component)]
+struct SpeedText;
+
+
 // --- 天体 ---
 #[derive(Component)]
 struct Sun;
@@ -62,10 +77,18 @@ struct Uranus;
 #[derive(Component)] 
 struct Neptune;
 
+#[derive(Component, Clone, Copy, Debug)]
+enum Planet {
+    SUN, MERCURY, VENUS, EARTH, MARS, JUPITER, SATURN, URANUS, NEPTUNE 
+}
+
 #[derive(Component)]
 struct Rotator{ 
     speed: f32,
 }
+
+#[derive(Component)]
+struct PlanetButton(Planet);
 
 // ========================================
 // resource
@@ -255,7 +278,11 @@ fn setup(
             ..default()
         }),
         Transform::from_xyz(1000.0, 0.0, 0.0)
-            .looking_at(Vec3::ZERO, Vec3::Y)
+            .looking_at(Vec3::ZERO, Vec3::Y),
+        Speedometer {
+            current_speed_units_per_sec: 0.0,
+            last_position: Vec3::new(1000.0, 0.0, 0.0)
+        }
     ));
 
     // ライト
@@ -331,15 +358,196 @@ fn rotate_planet(time: Res<Time>, mut query: Query<(&mut Transform, &Rotator)>) 
     }
 }
 
+// 現在の座標更新
+fn update_pos(
+    camera_query: Single<&Transform, With<MainCamera>>,
+    mut text_query: Single<&mut Text, With<CameraPositionText>>,
+) {
+    let pos = camera_query.translation;
+    text_query.0 = format!("Pos: {:.0}, {:.0}, {:.0}", pos.x, pos.y, pos.z);
+}
+
+// スピード計測
+fn update_speedometer(
+    time: Res<Time>,
+    // 計測対象（カメラやプレイヤーなど）
+    mut query: Query<(&Transform, &mut Speedometer)>, 
+) {
+    let dt = time.delta_secs();
+    if dt == 0.0 { return; } // ゼロ除算防止
+
+    for (transform, mut meter) in &mut query {
+        // 移動距離を計算 (今の位置 - 前の位置)
+        let distance_moved = transform.translation.distance(meter.last_position);
+
+        // 秒速を計算 (距離 / 時間) -> これで「Bevelの1単位/秒」が出る
+        let speed_per_sec = distance_moved / dt;
+
+        meter.current_speed_units_per_sec = speed_per_sec;
+
+        // 前回の位置を更新（次フレームのために保存）
+        meter.last_position = transform.translation;
+    }
+}
+
+// ========================================
+// UI Systems
+// ========================================
+
+// UIセットアップ用システム
+fn setup_ui(mut commands: Commands) {
+    commands.spawn((
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            flex_direction: FlexDirection::Column,
+            justify_content: JustifyContent::End, 
+            ..default()
+        },
+    ))
+    .with_children(|parent| {
+        parent.spawn((
+            Text::new("Pos: 0.0, 0.0, 0.0"),
+            TextFont { font_size: 18.0, ..default() },
+            TextColor(Color::WHITE),
+            CameraPositionText, 
+        ));
+
+        parent.spawn((
+            Text::new("0.0km/h"),
+            TextFont { font_size: 18.0, ..default() },
+            TextColor(Color::WHITE),
+            SpeedText,
+        ));
+
+        let planets = [
+            (Planet::SUN,     "Sun"),
+            (Planet::MERCURY, "Mercury"),
+            (Planet::VENUS,   "Venus"),
+            (Planet::EARTH,   "Earth"),
+            (Planet::MARS,    "Mars"),
+            (Planet::JUPITER, "Jupiter"),
+            (Planet::SATURN,  "Saturn"),
+            (Planet::URANUS,  "Uranus"),
+            (Planet::NEPTUNE, "Neptune")
+        ];
+
+        parent.spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Px(50.0), 
+                flex_direction: FlexDirection::Row, 
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::FlexStart,
+                padding: UiRect::horizontal(Val::Px(20.0)),
+                column_gap: Val::Px(30.0), 
+                overflow: Overflow::clip_x(),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.5)),
+        ))
+        .with_children(|footer| {
+            for (planet_type, label) in planets {
+                footer.spawn((
+                    Button,
+                    Node {
+                        padding: UiRect::all(Val::Px(10.0)),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                    PlanetButton(planet_type), 
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(label),
+                        TextFont { font_size: 16.0, ..default() },
+                        TextColor(Color::WHITE),
+                    ));
+                });
+            }
+        });
+    });
+}
+
+// スピードメーターUI
+fn update_speed_ui(
+    meter_query: Query<&Speedometer, With<Camera>>, 
+    mut text_query: Query<&mut Text, With<SpeedText>>, 
+) {
+    if let Ok(meter) = meter_query.single() {
+        let speed_kmh = meter.current_speed_units_per_sec * UNIT_S_TO_KMH;
+
+        for mut text in &mut text_query {
+            text.0 = format!("{:.0} km/h", speed_kmh);
+        }
+    }
+}
+
+// 各天体へのワープボタンUI
+fn planet_button_system(
+    mut interaction_query: Query<
+        (&Interaction, &mut BackgroundColor, &PlanetButton),
+        (Changed<Interaction>, With<Button>),
+    >,
+    mut camera_query: Query<&mut Transform, With<MainCamera>>,
+) {
+    let Ok(mut camera_transform) = camera_query.single_mut() else { return };
+
+    for (interaction, mut bg_color, planet_button) in &mut interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *bg_color = Color::srgb(0.1, 0.5, 0.1).into();
+                let target_pos = get_planet_position(planet_button.0);
+
+                // 太陽の時は引き目にする
+                let offset = if target_pos == Vec3::ZERO {
+                    Vec3::new(1000.0, 0.0, 0.0)
+                } else {
+                    Vec3::new(100.0, 0.0, 0.0)
+                };
+
+                // 対象の惑星に視線を合わせる
+                *camera_transform = Transform::from_translation(target_pos + offset)
+                    .looking_at(target_pos, Vec3::Y);
+            }
+            Interaction::Hovered => {
+                *bg_color = Color::srgb(0.3, 0.3, 0.3).into();
+            }
+            Interaction::None => {
+                *bg_color = Color::srgb(0.2, 0.2, 0.2).into();
+            }
+        }
+    }
+}
+
+// 引数に渡された惑星の座標を返す
+fn get_planet_position(planet: Planet) -> Vec3 {
+    let data = match planet {
+        Planet::SUN     => SUN,
+        Planet::MERCURY => MERCURY,
+        Planet::VENUS   => VENUS,
+        Planet::EARTH   => EARTH,
+        Planet::MARS    => MARS,
+        Planet::JUPITER => JUPITER,
+        Planet::SATURN  => SATURN,
+        Planet::URANUS  => URANUS,
+        Planet::NEPTUNE => NEPTUNE,
+    };
+
+    Vec3::new(data[1], data[2], data[3])
+}
+
+
 // ========================================
 // App Entry Point
-// ========================================s
+// ========================================
 
 fn main() {
     App::new()
         .insert_resource(CameraSpeed(30.0))
         .add_plugins(DefaultPlugins)
-        .add_systems(Startup, setup)
-        .add_systems(Update, (move_camera, rotate_planet))
+        .add_systems(Startup, (setup, setup_ui))
+        .add_systems(Update, (move_camera, rotate_planet, planet_button_system, update_pos, update_speedometer, update_speed_ui))
         .run();
 }
