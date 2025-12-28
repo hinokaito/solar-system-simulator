@@ -34,7 +34,7 @@ const G: f32 = 50.0;
 // Components
 // ========================================
 
-// --- カメラ ---
+// カメラ
 #[derive(Component)]
 struct MainCamera;
 
@@ -42,7 +42,7 @@ struct MainCamera;
 #[derive(Component)]
 struct CameraPositionText;
 
-// スピードメーター用
+// --- スピードメーター ---
 #[derive(Component)]
 struct Speedometer {
     current_speed_units_per_sec: f32,
@@ -51,6 +51,10 @@ struct Speedometer {
 
 #[derive(Component)]
 struct SpeedText;
+
+// シミュレーション速度表示
+#[derive(Component)]
+struct SimSpeedText;
 
 
 // --- 天体 ---
@@ -114,6 +118,11 @@ struct CameraFollow {
     target: Option<Entity>,
     offset: Vec3,
 }
+
+// シミュレーション速度
+#[derive(Resource)]
+struct SimSpeed(f32);
+
 
 // ========================================
 // Systems
@@ -476,8 +485,12 @@ fn move_camera(
 }
 
 // 惑星を自転させるシステム
-fn rotate_planet(time: Res<Time>, mut query: Query<(&mut Transform, &Rotator)>) {
-    let dt = time.delta_secs();
+fn rotate_planet(
+    time: Res<Time>, 
+    sim_speed: Res<SimSpeed>,
+    mut query: Query<(&mut Transform, &Rotator)>
+) {
+    let dt = time.delta_secs() * sim_speed.0;
 
     for (mut transform, rotator) in &mut query {
         transform.rotate_y(rotator.speed * dt);
@@ -519,9 +532,10 @@ fn update_speedometer(
 // 太陽からの重力を計算
 fn orbit_system(
     time: Res<Time>,
+    sim_speed: Res<SimSpeed>,
     mut query: Query<(&mut Transform, &mut OrbitBody)>,
 ) {
-    let dt = time.delta_secs();
+    let dt = time.delta_secs() * sim_speed.0;
 
     // 太陽の位置
     let sun_pos = Vec3::ZERO;
@@ -539,12 +553,12 @@ fn orbit_system(
         // 重力の強さを計算: F = G * (M * m) / r^2
         // 加速度 a = F / m なので、 a = G * M / r^2
         let force_magnitude = G * sun_mass / distance_sq;
-
         // ベクトル
         let direction = diff / distance;
-
         // 速度の更新 (v = v0 + a * t)
         let acceleration = direction * force_magnitude;
+
+        body.velocity += acceleration * dt;
 
         // 位置の更新
         transform.translation += body.velocity * dt;
@@ -642,6 +656,26 @@ fn camera_follow_system(
     }
 }
 
+// シミュレーション速度変更システム　　　　　
+fn control_sim_speed(
+    input: Res<ButtonInput<KeyCode>>,
+    mut sim_speed: ResMut<SimSpeed>,
+) {
+    // 上キーで倍加、下キーで半減、Rでリセット
+    if input.just_pressed(KeyCode::ArrowUp) {
+        sim_speed.0 *= 2.0;
+        info!("Speed x{}", sim_speed.0);
+    }
+    if input.just_pressed(KeyCode::ArrowDown) {
+        sim_speed.0 *= 0.5;
+        if sim_speed.0 < 0.0 { sim_speed.0 = 0.0; } // 逆再生防止
+        info!("Speed x{}", sim_speed.0);
+    }
+    if input.just_pressed(KeyCode::KeyR) {
+        sim_speed.0 = 1.0;
+    }
+}
+
 // ========================================
 // UI Systems
 // ========================================
@@ -670,6 +704,13 @@ fn setup_ui(mut commands: Commands) {
             TextFont { font_size: 18.0, ..default() },
             TextColor(Color::WHITE),
             SpeedText,
+        ));
+
+        parent.spawn((
+            Text::new("Time Scale: x1.0"),
+            TextFont { font_size: 18.0, ..default() },
+            TextColor(Color::linear_rgb(1.0, 0.8, 0.2)),
+            SimSpeedText,
         ));
 
         let planets = [
@@ -736,6 +777,16 @@ fn update_speed_ui(
     }
 }
 
+// シミュレーション速度UI
+fn update_sim_speed_ui(
+    sim_speed: Res<SimSpeed>,
+    mut text_query: Query<&mut Text, With<SimSpeedText>>,
+) {
+    for mut text in &mut text_query {
+        text.0 = format!("Time Scale: x{:.2}", sim_speed.0);
+    }
+}
+
 
 // ========================================
 // App Entry Point
@@ -744,6 +795,7 @@ fn update_speed_ui(
 fn main() {
     App::new()
         .insert_resource(CameraSpeed(30.0))
+        .insert_resource(SimSpeed(1.0))
         .init_resource::<CameraFollow>()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, (setup, setup_ui))
@@ -755,6 +807,10 @@ fn main() {
                 update_pos, 
                 update_speedometer, 
                 update_speed_ui, 
+
+                control_sim_speed,
+                update_sim_speed_ui,
+
                 orbit_system,
                 camera_follow_system.after(orbit_system)
             ).chain()
