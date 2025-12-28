@@ -26,6 +26,9 @@ const SATURN:  [f32; 4] =   [9.45,  9.54 * AU_UNITS,  0.0, 0.0];
 const URANUS:  [f32; 4] =   [4.01,  19.19 * AU_UNITS, 0.0, 0.0];
 const NEPTUNE: [f32; 4] =   [3.88,  30.07 * AU_UNITS, 0.0, 0.0];
 
+// === 重力定数 ===
+const G: f32 = 50.0;
+
 
 // ========================================
 // Components
@@ -84,6 +87,12 @@ enum Planet {
 }
 
 #[derive(Component)]
+struct OrbitBody {
+    mass: f32,
+    velocity: Vec3,
+}
+
+#[derive(Component)]
 struct Rotator{ 
     speed: f32,
 }
@@ -112,6 +121,9 @@ fn setup(
     // ========================================
     // 天体
     // ========================================
+
+    // 太陽の質量設定
+    let sun_mass = 10000.0;
 
     // テクスチャマップ
     let stars = asset_server.load("stars.png");
@@ -198,7 +210,13 @@ fn setup(
             rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
             scale: Vec3::splat(MERCURY[0]),
         },
-        Rotator { speed: 0.0008 }
+        Rotator { speed: 0.0008 },
+        OrbitBody {
+            mass: 1.65,
+            // 円軌道速度の計算: v = sqrt(G * M_sun / r)
+            // 位置が X軸なら、速度は Z軸（接線方向）に向ける
+            velocity: Vec3::new(0.0, 0.0, -(G * sun_mass / MERCURY[1]).sqrt()),
+        }
     ));
 
     // 金星
@@ -215,7 +233,11 @@ fn setup(
             rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
             scale: Vec3::splat(VENUS[0]),
         },
-        Rotator { speed: 0.0002 }
+        Rotator { speed: 0.0002 },
+        OrbitBody {
+            mass: 24.5,
+            velocity: Vec3::new(0.0, 0.0, -(G * sun_mass / VENUS[1]).sqrt()),
+        }
     ));
 
     // 地球
@@ -232,7 +254,11 @@ fn setup(
             rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
             scale: Vec3::splat(EARTH[0]),
         },
-        Rotator { speed: 0.5 }
+        Rotator { speed: 0.5 },
+        OrbitBody {
+            mass: 30.0,
+            velocity: Vec3::new(0.0, 0.0, -(G * sun_mass / EARTH[1]).sqrt()),
+        }
     ));
 
     // 火星
@@ -249,7 +275,11 @@ fn setup(
             rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
             scale: Vec3::splat(MARS[0]),
         },
-        Rotator { speed: 0.55 }
+        Rotator { speed: 0.55 },
+        OrbitBody {
+            mass: 3.23,
+            velocity: Vec3::new(0.0, 0.0, -(G * sun_mass / MARS[1]).sqrt()),
+        }
     ));
 
     // 木星
@@ -266,7 +296,11 @@ fn setup(
             rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
             scale: Vec3::splat(JUPITER[0]),
         },
-        Rotator { speed: 1.2 }
+        Rotator { speed: 1.2 },
+        OrbitBody {
+            mass: 9540.0,
+            velocity: Vec3::new(0.0, 0.0, -(G * sun_mass / JUPITER[1]).sqrt()),
+        }
     ));
 
     // 土星
@@ -283,7 +317,11 @@ fn setup(
             rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
             scale: Vec3::splat(SATURN[0]),
         },
-        Rotator { speed: 1.15 }
+        Rotator { speed: 1.15 },
+        OrbitBody {
+            mass: 2850.0,
+            velocity: Vec3::new(0.0, 0.0, -(G * sun_mass / SATURN[1]).sqrt()),
+        }
     ));
 
     // 天王星
@@ -300,7 +338,11 @@ fn setup(
             rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
             scale: Vec3::splat(URANUS[0]),
         },
-        Rotator { speed: 0.65 }
+        Rotator { speed: 0.65 },
+        OrbitBody {
+            mass: 436.0,
+            velocity: Vec3::new(0.0, 0.0, -(G * sun_mass / URANUS[1]).sqrt()),
+        }
     ));
 
     // 海王星
@@ -317,7 +359,11 @@ fn setup(
             rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
             scale: Vec3::splat(NEPTUNE[0]),
         },
-        Rotator { speed: 0.8 }
+        Rotator { speed: 0.8 },
+        OrbitBody {
+            mass: 515.0,
+            velocity: Vec3::new(0.0, 0.0, -(G * sun_mass / NEPTUNE[1]).sqrt()),
+        }
     ));
 
     // ========================================
@@ -448,6 +494,41 @@ fn update_speedometer(
 
         // 前回の位置を更新（次フレームのために保存）
         meter.last_position = transform.translation;
+    }
+}
+
+// 太陽からの重力を計算
+fn orbit_system(
+    time: Res<Time>,
+    mut query: Query<(&mut Transform, &mut OrbitBody)>,
+) {
+    let dt = time.delta_secs();
+
+    // 太陽の位置
+    let sun_pos = Vec3::ZERO;
+    let sun_mass = 10000.0; // 太陽の質量(仮)
+
+    for (mut transform, mut body) in &mut query {
+        // 太陽へのベクトルと距離
+        let diff = sun_pos - transform.translation;
+        let distance_sq = diff.length_squared();
+        let distance = distance_sq.sqrt();
+
+        // ゼロ除算と太陽自身の処理を飛ばす
+        if distance < 0.1 { continue; }
+
+        // 重力の強さを計算: F = G * (M * m) / r^2
+        // 加速度 a = F / m なので、 a = G * M / r^2
+        let force_magnitude = G * sun_mass / distance_sq;
+
+        // ベクトル
+        let direction = diff / distance;
+
+        // 速度の更新 (v = v0 + a * t)
+        let acceleration = direction * force_magnitude;
+
+        // 位置の更新
+        transform.translation += body.velocity * dt;
     }
 }
 
@@ -617,6 +698,6 @@ fn main() {
         .insert_resource(CameraSpeed(30.0))
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, (setup, setup_ui))
-        .add_systems(Update, (move_camera, rotate_planet, planet_button_system, update_pos, update_speedometer, update_speed_ui))
+        .add_systems(Update, (move_camera, rotate_planet, planet_button_system, update_pos, update_speedometer, update_speed_ui, orbit_system))
         .run();
 }
