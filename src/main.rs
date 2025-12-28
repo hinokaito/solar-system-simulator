@@ -81,8 +81,8 @@ struct Uranus;
 #[derive(Component)] 
 struct Neptune;
 
-#[derive(Component, Clone, Copy, Debug)]
-enum Planet {
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+enum CelestialBody {
     SUN, MERCURY, VENUS, EARTH, MARS, JUPITER, SATURN, URANUS, NEPTUNE 
 }
 
@@ -98,7 +98,8 @@ struct Rotator{
 }
 
 #[derive(Component)]
-struct PlanetButton(Planet);
+struct CelestialBodyButton(CelestialBody);
+
 
 // ========================================
 // resource
@@ -106,6 +107,13 @@ struct PlanetButton(Planet);
 
 #[derive(Resource)]
 struct CameraSpeed(f32);
+
+// カメラの惑星追従用
+#[derive(Resource, Default)]
+struct CameraFollow {
+    target: Option<Entity>,
+    offset: Vec3,
+}
 
 // ========================================
 // Systems
@@ -181,6 +189,7 @@ fn setup(
     // 太陽
     commands.spawn((
         Sun,
+        CelestialBody::SUN,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -199,6 +208,7 @@ fn setup(
     // 水星
     commands.spawn((
         Mercury,
+        CelestialBody::MERCURY,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -222,6 +232,7 @@ fn setup(
     // 金星
     commands.spawn((
         Venus,
+        CelestialBody::VENUS,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -243,6 +254,7 @@ fn setup(
     // 地球
     commands.spawn((
         Earth,
+        CelestialBody::EARTH,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -264,6 +276,7 @@ fn setup(
     // 火星
     commands.spawn((
         Mars,
+        CelestialBody::MARS,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -285,6 +298,7 @@ fn setup(
     // 木星
     commands.spawn((
         Jupiter,
+        CelestialBody::JUPITER,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -306,6 +320,7 @@ fn setup(
     // 土星
     commands.spawn((
         Saturn,
+        CelestialBody::SATURN,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -327,6 +342,7 @@ fn setup(
     // 天王星
     commands.spawn((
         Uranus,
+        CelestialBody::URANUS,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -348,6 +364,7 @@ fn setup(
     // 海王星
     commands.spawn((
         Neptune,
+        CelestialBody::NEPTUNE,
         Mesh3d(celestial_body_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -412,6 +429,7 @@ fn move_camera(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut camera_speed: ResMut<CameraSpeed>,
     mut query: Query<&mut Transform, With<MainCamera>>,
+    mut camera_follow: ResMut<CameraFollow>
 ) {
     if let Ok(mut transform) = query.single_mut() {
         let move_speed = camera_speed.0;
@@ -450,6 +468,7 @@ fn move_camera(
         if keyboard_input.pressed(KeyCode::Digit9) { camera_speed.0 = 100000.0; }
 
         if movement.length_squared() > 0.0 {
+            camera_follow.target = None; // 追従解除
             let delta = movement.normalize() * move_speed * time.delta_secs();
             transform.translation += delta;
         }
@@ -532,6 +551,97 @@ fn orbit_system(
     }
 }
 
+// 各天体へのワープボタン
+fn celestial_body_button_system(
+    mut interaction_query: Query<
+        (&Interaction, &mut BackgroundColor, &CelestialBodyButton),
+        (Changed<Interaction>, With<Button>),
+    >,
+    // 修正点: Without<MainCamera> を追加して、カメラと天体が被らないことをBevyに保証する
+    celestial_body_query: Query<(Entity, &CelestialBody, &Transform), Without<MainCamera>>,
+    mut camera_follow: ResMut<CameraFollow>,
+    mut camera_query: Query<&mut Transform, With<MainCamera>>,
+) {
+    use CelestialBody::*;
+    let Ok(mut camera_transform) = camera_query.single_mut() else { return };
+
+    for (interaction, mut bg_color, planet_button) in &mut interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *bg_color = Color::srgb(0.1, 0.5, 0.1).into();
+                let target = planet_button.0;
+                let target_pos = get_planet_position(planet_button.0);
+
+                if let Some((entity, _, _celestial_body_tf)) = celestial_body_query.iter().find(|(_, c, _)| **c == target) {
+
+                    // 太陽の時は引き目にする
+                    let offset = match target {
+                        SUN     => Vec3::new(750.0, 0.0, 0.0),
+                        MERCURY => Vec3::new(3.0, 0.0, -0.7),
+                        VENUS   => Vec3::new(8.0, 0.0, -1.7),
+                        EARTH   => Vec3::new(8.0, 0.0, -1.7),
+                        MARS    => Vec3::new(4.0, 0.0, -0.9),
+                        JUPITER => Vec3::new(60.0, 0.0, -17.0),
+                        SATURN  => Vec3::new(55.0, 0.0, -14.0),
+                        URANUS  => Vec3::new(25.0, 0.0, -7.0),
+                        NEPTUNE => Vec3::new(25.0, 0.0, -7.0),
+                    };
+
+                    camera_follow.target = Some(entity);
+                    camera_follow.offset = offset;
+
+                    // 対象の初期位置へカメラを移動
+                    *camera_transform = Transform::from_translation(target_pos + offset)
+                        .looking_at(Vec3::ZERO, Vec3::Y);
+                }
+            }
+            Interaction::Hovered => {
+                *bg_color = Color::srgb(0.3, 0.3, 0.3).into();
+            }
+            Interaction::None => {
+                *bg_color = Color::srgb(0.2, 0.2, 0.2).into();
+            }
+        }
+    }
+}
+
+// 引数に渡された惑星の座標を返す
+fn get_planet_position(planet: CelestialBody) -> Vec3 {
+    let data = match planet {
+        CelestialBody::SUN     => SUN,
+        CelestialBody::MERCURY => MERCURY,
+        CelestialBody::VENUS   => VENUS,
+        CelestialBody::EARTH   => EARTH,
+        CelestialBody::MARS    => MARS,
+        CelestialBody::JUPITER => JUPITER,
+        CelestialBody::SATURN  => SATURN,
+        CelestialBody::URANUS  => URANUS,
+        CelestialBody::NEPTUNE => NEPTUNE,
+    };
+
+    Vec3::new(data[1], data[2], data[3])
+}
+
+// ターゲットの動きに応じてカメラも動かす
+fn camera_follow_system(
+    follow: Res<CameraFollow>,
+    target_query: Query<&Transform, (Without<MainCamera>, With<CelestialBody>)>,
+    mut camera_query: Single<&mut Transform, With<MainCamera>>,
+) {
+    // ターゲットが設定されている場合のみ実行
+    if let Some(target_entity) = follow.target {
+        if let Ok(target_transform) = target_query.get(target_entity) {
+            // カメラの位置 = 惑星の位置 + オフセット
+            let new_pos = target_transform.translation + follow.offset;
+            
+            camera_query.translation = new_pos;
+            
+            // 常に惑星の方を向くならこれ有効化
+            camera_query.look_at(target_transform.translation, Vec3::Y);
+        }
+    }
+}
+
 // ========================================
 // UI Systems
 // ========================================
@@ -563,15 +673,15 @@ fn setup_ui(mut commands: Commands) {
         ));
 
         let planets = [
-            (Planet::SUN,     "Sun"),
-            (Planet::MERCURY, "Mercury"),
-            (Planet::VENUS,   "Venus"),
-            (Planet::EARTH,   "Earth"),
-            (Planet::MARS,    "Mars"),
-            (Planet::JUPITER, "Jupiter"),
-            (Planet::SATURN,  "Saturn"),
-            (Planet::URANUS,  "Uranus"),
-            (Planet::NEPTUNE, "Neptune")
+            (CelestialBody::SUN,     "Sun"),
+            (CelestialBody::MERCURY, "Mercury"),
+            (CelestialBody::VENUS,   "Venus"),
+            (CelestialBody::EARTH,   "Earth"),
+            (CelestialBody::MARS,    "Mars"),
+            (CelestialBody::JUPITER, "Jupiter"),
+            (CelestialBody::SATURN,  "Saturn"),
+            (CelestialBody::URANUS,  "Uranus"),
+            (CelestialBody::NEPTUNE, "Neptune")
         ];
 
         parent.spawn((
@@ -598,7 +708,7 @@ fn setup_ui(mut commands: Commands) {
                         ..default()
                     },
                     BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                    PlanetButton(planet_type), 
+                    CelestialBodyButton(planet_type), 
                 ))
                 .with_children(|button| {
                     button.spawn((
@@ -626,68 +736,6 @@ fn update_speed_ui(
     }
 }
 
-// 各天体へのワープボタンUI
-fn planet_button_system(
-    mut interaction_query: Query<
-        (&Interaction, &mut BackgroundColor, &PlanetButton),
-        (Changed<Interaction>, With<Button>),
-    >,
-    mut camera_query: Query<&mut Transform, With<MainCamera>>,
-) {
-    use Planet::*;
-    let Ok(mut camera_transform) = camera_query.single_mut() else { return };
-
-    for (interaction, mut bg_color, planet_button) in &mut interaction_query {
-        match *interaction {
-            Interaction::Pressed => {
-                *bg_color = Color::srgb(0.1, 0.5, 0.1).into();
-                let target = planet_button.0;
-                let target_pos = get_planet_position(planet_button.0);
-
-                // 太陽の時は引き目にする
-                let offset = match target {
-                    SUN =>     Vec3::new(750.0, 0.0, 0.0),
-                    MERCURY => Vec3::new(3.0, 0.0, -0.7),
-                    VENUS =>   Vec3::new(8.0, 0.0, -1.7),
-                    EARTH =>   Vec3::new(8.0, 0.0, -1.7),
-                    MARS =>    Vec3::new(4.0, 0.0, -0.9),
-                    JUPITER => Vec3::new(60.0, 0.0, -17.0),
-                    SATURN =>  Vec3::new(55.0, 0.0, -14.0),
-                    URANUS =>  Vec3::new(25.0, 0.0, -7.0),
-                    NEPTUNE => Vec3::new(25.0, 0.0, -7.0),
-                };
-
-                // ~~対象の惑星に視線を合わせる~~ 太陽に合わせた
-                *camera_transform = Transform::from_translation(target_pos + offset)
-                    .looking_at(Vec3::ZERO, Vec3::Y);
-            }
-            Interaction::Hovered => {
-                *bg_color = Color::srgb(0.3, 0.3, 0.3).into();
-            }
-            Interaction::None => {
-                *bg_color = Color::srgb(0.2, 0.2, 0.2).into();
-            }
-        }
-    }
-}
-
-// 引数に渡された惑星の座標を返す
-fn get_planet_position(planet: Planet) -> Vec3 {
-    let data = match planet {
-        Planet::SUN     => SUN,
-        Planet::MERCURY => MERCURY,
-        Planet::VENUS   => VENUS,
-        Planet::EARTH   => EARTH,
-        Planet::MARS    => MARS,
-        Planet::JUPITER => JUPITER,
-        Planet::SATURN  => SATURN,
-        Planet::URANUS  => URANUS,
-        Planet::NEPTUNE => NEPTUNE,
-    };
-
-    Vec3::new(data[1], data[2], data[3])
-}
-
 
 // ========================================
 // App Entry Point
@@ -696,8 +744,20 @@ fn get_planet_position(planet: Planet) -> Vec3 {
 fn main() {
     App::new()
         .insert_resource(CameraSpeed(30.0))
+        .init_resource::<CameraFollow>()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, (setup, setup_ui))
-        .add_systems(Update, (move_camera, rotate_planet, planet_button_system, update_pos, update_speedometer, update_speed_ui, orbit_system))
+        .add_systems(Update, 
+            (
+                move_camera, 
+                rotate_planet, 
+                celestial_body_button_system, 
+                update_pos, 
+                update_speedometer, 
+                update_speed_ui, 
+                orbit_system,
+                camera_follow_system.after(orbit_system)
+            ).chain()
+        )
         .run();
 }
