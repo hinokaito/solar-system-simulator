@@ -1,5 +1,5 @@
 use bevy::{
-    core_pipeline::tonemapping::Tonemapping, post_process::bloom::Bloom, prelude::*, render::view::Hdr
+    asset::transformer, core_pipeline::tonemapping::Tonemapping, post_process::bloom::Bloom, prelude::*, render::view::Hdr
 };
 
 // ========================================
@@ -34,7 +34,6 @@ const NEPTUNE: [f32; 4] =   [3.88,  30.07 * AU_UNITS, 0.0, 0.0];
 #[derive(Component)]
 struct MainCamera;
 
-
 // --- 天体 ---
 #[derive(Component)]
 struct Sun;
@@ -63,6 +62,10 @@ struct Uranus;
 #[derive(Component)] 
 struct Neptune;
 
+#[derive(Component)]
+struct Rotator{ 
+    speed: f32,
+}
 
 // ========================================
 // resource
@@ -87,6 +90,8 @@ fn setup(
     // ========================================
 
     // テクスチャマップ
+    let stars = asset_server.load("stars.png");
+
     let sun_texture = asset_server.load("sun.png");
     let mercury_texture = asset_server.load("mercury.png");
     let venus_texture = asset_server.load("venus.png");
@@ -100,6 +105,19 @@ fn setup(
     // 天体メッシュ
     let celestial_body_mesh = meshes.add(Sphere::new(1.0));
 
+    // スカイスフィア
+    commands.spawn((
+        Mesh3d(meshes.add(Sphere::new(1_000_000_000_000_000_000.0))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color_texture: Some(stars),
+            unlit: true,
+            cull_mode: None,
+            ..default()
+        })),
+        Transform::from_xyz(0.0, 0.0, 0.0).with_scale(Vec3::splat(1_000_000_000_000_000.0)),
+        Rotator { speed: 0.001 }
+    ));
+
     // 太陽
     commands.spawn((
         Sun,
@@ -110,7 +128,8 @@ fn setup(
             emissive: LinearRgba::rgb(256.0, 60.0, 15.0),
             ..default()
         })),
-        Transform:: from_xyz(SUN[1], SUN[2], SUN[3]).with_scale(Vec3::splat(SUN[0]))
+        Transform:: from_xyz(SUN[1], SUN[2], SUN[3]).with_scale(Vec3::splat(SUN[0])),
+        Rotator { speed: 0.02 }
     ));
 
     // 水星
@@ -122,7 +141,8 @@ fn setup(
             base_color_texture: Some(mercury_texture),
             ..default()
         })),
-        Transform:: from_xyz(MERCURY[1], MERCURY[2], MERCURY[3]).with_scale(Vec3::splat(MERCURY[0]))
+        Transform:: from_xyz(MERCURY[1], MERCURY[2], MERCURY[3]).with_scale(Vec3::splat(MERCURY[0])),
+        Rotator { speed: 0.0008 }
     ));
 
     // 金星
@@ -134,7 +154,8 @@ fn setup(
             base_color_texture: Some(venus_texture),
             ..default()
         })),
-        Transform:: from_xyz(VENUS[1], VENUS[2], VENUS[3]).with_scale(Vec3::splat(VENUS[0]))
+        Transform:: from_xyz(VENUS[1], VENUS[2], VENUS[3]).with_scale(Vec3::splat(VENUS[0])),
+        Rotator { speed: 0.0002 }
     ));
 
     // 地球
@@ -146,7 +167,8 @@ fn setup(
             base_color_texture: Some(earth_texture),
             ..default()
         })),
-        Transform:: from_xyz(EARTH[1], EARTH[2], EARTH[3]).with_scale(Vec3::splat(EARTH[0]))
+        Transform:: from_xyz(EARTH[1], EARTH[2], EARTH[3]).with_scale(Vec3::splat(EARTH[0])),
+        Rotator { speed: 0.5 }
     ));
 
     // 火星
@@ -158,7 +180,8 @@ fn setup(
             base_color_texture: Some(mars_texture),
             ..default()
         })),
-        Transform:: from_xyz(MARS[1], MARS[2], MARS[3]).with_scale(Vec3::splat(MARS[0]))
+        Transform:: from_xyz(MARS[1], MARS[2], MARS[3]).with_scale(Vec3::splat(MARS[0])),
+        Rotator { speed: 0.55 }
     ));
 
     // 木星
@@ -170,7 +193,8 @@ fn setup(
             base_color_texture: Some(jupiter_texture),
             ..default()
         })),
-        Transform:: from_xyz(JUPITER[1], JUPITER[2], JUPITER[3]).with_scale(Vec3::splat(JUPITER[0]))
+        Transform:: from_xyz(JUPITER[1], JUPITER[2], JUPITER[3]).with_scale(Vec3::splat(JUPITER[0])),
+        Rotator { speed: 1.2 }
     ));
 
     // 土星
@@ -182,7 +206,8 @@ fn setup(
             base_color_texture: Some(saturn_texture),
             ..default()
         })),
-        Transform:: from_xyz(SATURN[1], SATURN[2], SATURN[3]).with_scale(Vec3::splat(SATURN[0]))
+        Transform:: from_xyz(SATURN[1], SATURN[2], SATURN[3]).with_scale(Vec3::splat(SATURN[0])),
+        Rotator { speed: 1.15 }
     ));
 
     // 天王星
@@ -194,7 +219,8 @@ fn setup(
             base_color_texture: Some(uranus_texture),
             ..default()
         })),
-        Transform:: from_xyz(URANUS[1], URANUS[2], URANUS[3]).with_scale(Vec3::splat(URANUS[0]))
+        Transform:: from_xyz(URANUS[1], URANUS[2], URANUS[3]).with_scale(Vec3::splat(URANUS[0])),
+        Rotator { speed: 0.65 }
     ));
 
     // 海王星
@@ -206,7 +232,8 @@ fn setup(
             base_color_texture: Some(neptune_texture),
             ..default()
         })),
-        Transform:: from_xyz(NEPTUNE[1], NEPTUNE[2], NEPTUNE[3]).with_scale(Vec3::splat(NEPTUNE[0]))
+        Transform:: from_xyz(NEPTUNE[1], NEPTUNE[2], NEPTUNE[3]).with_scale(Vec3::splat(NEPTUNE[0])),
+        Rotator { speed: 0.8 }
     ));
 
     // ========================================
@@ -295,6 +322,14 @@ fn move_camera(
     }
 }
 
+// 惑星を自転させるシステム
+fn rotate_planet(time: Res<Time>, mut query: Query<(&mut Transform, &Rotator)>) {
+    let dt = time.delta_secs();
+
+    for (mut transform, rotator) in &mut query {
+        transform.rotate_y(rotator.speed * dt);
+    }
+}
 
 // ========================================
 // App Entry Point
@@ -302,10 +337,9 @@ fn move_camera(
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(CameraSpeed(30.0))
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_systems(Update, move_camera)
+        .add_systems(Update, (move_camera, rotate_planet))
         .run();
 }
