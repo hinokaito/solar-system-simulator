@@ -1,6 +1,7 @@
 use bevy::{
     core_pipeline::tonemapping::Tonemapping, post_process::bloom::Bloom, prelude::*, render::view::Hdr
 };
+use bevy_mesh::{SphereKind, SphereMeshBuilder};
 
 // ========================================
 // Constants
@@ -126,18 +127,42 @@ fn setup(
     let neptune_texture = asset_server.load("neptune.png");
 
     // 天体メッシュ
-    let celestial_body_mesh = meshes.add(Sphere::new(1.0));
+    let celestial_body_mesh = meshes.add(
+        SphereMeshBuilder {
+            sphere: Sphere {
+                radius: 1.0,
+            },
+            kind: SphereKind::Uv { 
+                sectors: 64,
+                stacks: 32,
+            },
+        }
+    );
 
     // スカイスフィア
     commands.spawn((
-        Mesh3d(meshes.add(Sphere::new(1_000_000_000_000_000_000.0))),
+        Mesh3d(meshes.add(
+        SphereMeshBuilder {
+                sphere: Sphere {
+                    radius: 1.0,
+                },
+                kind: SphereKind::Uv { 
+                    sectors: 64,
+                    stacks: 32,
+                },
+            }
+        )),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color_texture: Some(stars),
             unlit: true,
             cull_mode: None,
             ..default()
         })),
-        Transform::from_xyz(0.0, 0.0, 0.0).with_scale(Vec3::splat(1_000_000_000_000_000.0)),
+        Transform {
+            translation: Vec3::new(0.0, 0.0, 0.0),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(1_000_000_000_000.0),
+        },
         Rotator { speed: 0.001 }
     ));
 
@@ -151,7 +176,11 @@ fn setup(
             emissive: LinearRgba::rgb(256.0, 60.0, 15.0),
             ..default()
         })),
-        Transform:: from_xyz(SUN[1], SUN[2], SUN[3]).with_scale(Vec3::splat(SUN[0])),
+        Transform {
+            translation: Vec3::new(SUN[1], SUN[2], SUN[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(SUN[0]),
+        },
         Rotator { speed: 0.02 }
     ));
 
@@ -164,7 +193,11 @@ fn setup(
             base_color_texture: Some(mercury_texture),
             ..default()
         })),
-        Transform:: from_xyz(MERCURY[1], MERCURY[2], MERCURY[3]).with_scale(Vec3::splat(MERCURY[0])),
+        Transform {
+            translation: Vec3::new(MERCURY[1], MERCURY[2], MERCURY[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(MERCURY[0]),
+        },
         Rotator { speed: 0.0008 }
     ));
 
@@ -177,7 +210,11 @@ fn setup(
             base_color_texture: Some(venus_texture),
             ..default()
         })),
-        Transform:: from_xyz(VENUS[1], VENUS[2], VENUS[3]).with_scale(Vec3::splat(VENUS[0])),
+        Transform {
+            translation: Vec3::new(VENUS[1], VENUS[2], VENUS[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(VENUS[0]),
+        },
         Rotator { speed: 0.0002 }
     ));
 
@@ -190,7 +227,11 @@ fn setup(
             base_color_texture: Some(earth_texture),
             ..default()
         })),
-        Transform:: from_xyz(EARTH[1], EARTH[2], EARTH[3]).with_scale(Vec3::splat(EARTH[0])),
+        Transform {
+            translation: Vec3::new(EARTH[1], EARTH[2], EARTH[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(EARTH[0]),
+        },
         Rotator { speed: 0.5 }
     ));
 
@@ -203,7 +244,11 @@ fn setup(
             base_color_texture: Some(mars_texture),
             ..default()
         })),
-        Transform:: from_xyz(MARS[1], MARS[2], MARS[3]).with_scale(Vec3::splat(MARS[0])),
+        Transform {
+            translation: Vec3::new(MARS[1], MARS[2], MARS[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(MARS[0]),
+        },
         Rotator { speed: 0.55 }
     ));
 
@@ -216,7 +261,11 @@ fn setup(
             base_color_texture: Some(jupiter_texture),
             ..default()
         })),
-        Transform:: from_xyz(JUPITER[1], JUPITER[2], JUPITER[3]).with_scale(Vec3::splat(JUPITER[0])),
+        Transform {
+            translation: Vec3::new(JUPITER[1], JUPITER[2], JUPITER[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(JUPITER[0]),
+        },
         Rotator { speed: 1.2 }
     ));
 
@@ -229,7 +278,11 @@ fn setup(
             base_color_texture: Some(saturn_texture),
             ..default()
         })),
-        Transform:: from_xyz(SATURN[1], SATURN[2], SATURN[3]).with_scale(Vec3::splat(SATURN[0])),
+        Transform {
+            translation: Vec3::new(SATURN[1], SATURN[2], SATURN[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(SATURN[0]),
+        },
         Rotator { speed: 1.15 }
     ));
 
@@ -242,7 +295,11 @@ fn setup(
             base_color_texture: Some(uranus_texture),
             ..default()
         })),
-        Transform:: from_xyz(URANUS[1], URANUS[2], URANUS[3]).with_scale(Vec3::splat(URANUS[0])),
+        Transform {
+            translation: Vec3::new(URANUS[1], URANUS[2], URANUS[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(URANUS[0]),
+        },
         Rotator { speed: 0.65 }
     ));
 
@@ -255,7 +312,11 @@ fn setup(
             base_color_texture: Some(neptune_texture),
             ..default()
         })),
-        Transform:: from_xyz(NEPTUNE[1], NEPTUNE[2], NEPTUNE[3]).with_scale(Vec3::splat(NEPTUNE[0])),
+        Transform {
+            translation: Vec3::new(NEPTUNE[1], NEPTUNE[2], NEPTUNE[3]),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2),
+            scale: Vec3::splat(NEPTUNE[0]),
+        },
         Rotator { speed: 0.8 }
     ));
 
